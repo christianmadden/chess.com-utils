@@ -160,12 +160,18 @@ def main():
         
         white = g.get("white", {}).get("username", "").lower()
         black = g.get("black", {}).get("username", "").lower()
+        pgn = g.get("pgn", "")
+
+        # Skip coach / lesson games (Play vs Coach)
+        if 'Event "Play vs Coach"' in pgn:
+            dprint(args.verbose, "Skipping coach game")
+            continue
+
         # Skip bot games
         if white == "chess.com" or black == "chess.com":
             dprint(args.verbose, "Skipping bot game")
             continue
         
-        pgn = g.get("pgn", "")
         start_utc, end_utc = parse_pgn_times(pgn, verbose=args.verbose)
         if not start_utc:
             continue
