@@ -2,4 +2,4 @@ chess/*.*
 .DS_Store
 .env
 .envrc
-json/*.*
+json/*
