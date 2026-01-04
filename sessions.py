@@ -267,6 +267,11 @@ def main():
     parser.add_argument("--gap", type=int, default=60)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--day-cutoff-hour", type=int, default=5)
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Delete cached monthly data for this user before running",
+    )
     args = parser.parse_args()
 
     console = Console()
@@ -275,6 +280,18 @@ def main():
         print("Error: No username provided.")
         print("Set CHESS_USERNAME in your environment or pass --user <username>.")
         raise SystemExit(1)
+
+    # Optionally clear cached data for this user
+    if args.no_cache:
+        safe_user = args.user.strip().lower()
+        user_cache_dir = os.path.join(CACHE_ROOT, safe_user)
+        if os.path.isdir(user_cache_dir):
+            import shutil
+
+            shutil.rmtree(user_cache_dir)
+            print(f"Cache cleared: {user_cache_dir}")
+        else:
+            print("No cache to clear.")
 
     now = dt.datetime.now(LOCAL_TZ)
     day_shift = dt.timedelta(hours=args.day_cutoff_hour)
