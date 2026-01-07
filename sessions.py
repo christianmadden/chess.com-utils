@@ -1,29 +1,3 @@
-def fetch_month_games(username, year, month, verbose=False):
-    """Fetch all games for a given (year, month) from Chess.com.
-
-    Past months are cached on disk; the current month is always fetched live.
-    """
-    today = dt.datetime.now(LOCAL_TZ).date()
-    is_current_month = (year == today.year and month == today.month)
-
-    if not is_current_month:
-        cached = _read_cached_month(username, year, month, verbose)
-        if isinstance(cached, dict):
-            return cached.get("games", [])
-
-    url = f"https://api.chess.com/pub/player/{username}/games/{year}/{month:02d}"
-    dprint(verbose, f"Fetching {url}")
-
-    resp = requests.get(url, headers={"User-Agent": "chess-sessions/1.0"}, timeout=10)
-    resp.raise_for_status()
-
-    payload = resp.json()
-    if isinstance(payload, dict):
-        if not is_current_month:
-            _write_cached_month(username, year, month, payload, verbose)
-        return payload.get("games", [])
-
-    return []
 #!/usr/bin/env python3
 """chess_sessions.py
 
@@ -242,6 +216,58 @@ def month_iter(start_date: dt.date, end_date: dt.date):
             m += 1
 
 
+def month_iter_backwards(end_date: dt.date, max_months: int = 36):
+    """Yield (year, month) tuples going backwards from end_date's month for up to max_months."""
+    y, m = end_date.year, end_date.month
+    for _ in range(max_months):
+        yield y, m
+        if m == 1:
+            y -= 1
+            m = 12
+        else:
+            m -= 1
+
+
+def fetch_most_recent_games(username, n: int, verbose: bool = False):
+    """Fetch and parse the most recent N games across months (no day filtering).
+
+    Uses the monthly archives endpoint, walking backwards month-by-month until enough
+    valid games are collected.
+    """
+    if n <= 0:
+        return []
+
+    now = dt.datetime.now(LOCAL_TZ)
+
+    parsed = []
+    for y, m in month_iter_backwards(now.date()):
+        games = fetch_month_games(username, y, m, verbose)
+        for g in games:
+            white = g.get("white", {}).get("username", "").lower()
+            black = g.get("black", {}).get("username", "").lower()
+            pgn = g.get("pgn", "")
+
+            # Skip coach/training/odd entries
+            if 'Event "Play vs Coach"' in pgn:
+                continue
+            if white == "chess.com" or black == "chess.com":
+                continue
+
+            start, end = parse_pgn_times(pgn, verbose)
+            if not start or not end:
+                continue
+
+            res, side = get_game_result(g, username)
+            parsed.append((start, end, res, side))
+
+        # If we have at least N parsed games, we can stop early.
+        if len(parsed) >= n:
+            break
+
+    parsed.sort(key=lambda x: x[0])
+    return parsed[-n:]
+
+
 def fetch_games_for_range(username, start_date: dt.date, end_date: dt.date, verbose=False):
     """Fetch games across all months that overlap [start_date, end_date]."""
     all_games = []
@@ -257,7 +283,22 @@ def fetch_games_for_range(username, start_date: dt.date, end_date: dt.date, verb
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--days", type=int, default=1)
+    def parse_days(value):
+        if isinstance(value, str) and value.lower() == "all":
+            return "all"
+        try:
+            v = int(value)
+            if v <= 0:
+                raise ValueError
+            return v
+        except ValueError:
+            raise argparse.ArgumentTypeError("--days must be a positive integer or 'all'")
+    parser.add_argument(
+        "--days",
+        type=parse_days,
+        default=1,
+        help="Number of days to include, or 'all' for all available history",
+    )
     parser.add_argument(
         "--user",
         type=str,
@@ -271,6 +312,12 @@ def main():
         "--no-cache",
         action="store_true",
         help="Delete cached monthly data for this user before running",
+    )
+    parser.add_argument(
+        "--games",
+        type=int,
+        default=None,
+        help="Limit output to the most recent N games (overrides --days filtering)",
     )
     args = parser.parse_args()
 
@@ -296,35 +343,54 @@ def main():
     now = dt.datetime.now(LOCAL_TZ)
     day_shift = dt.timedelta(hours=args.day_cutoff_hour)
     today = (now - day_shift).date()
-    cutoff = today - dt.timedelta(days=args.days - 1)
 
-    # Fetch all months that overlap the requested date window (e.g. spanning month/year boundaries)
-    games = fetch_games_for_range(args.user, cutoff, today, args.verbose)
+    # If --days is omitted and --games is provided, fetch last N games regardless of days.
+    if args.days is None and args.games is not None and args.games > 0:
+        parsed = fetch_most_recent_games(args.user, args.games, args.verbose)
+    else:
+        if args.days == "all":
+            cutoff = None
+        else:
+            days = args.days
+            cutoff = today - dt.timedelta(days=days - 1)
 
-    parsed = []
-    for g in games:
-        white = g.get("white", {}).get("username", "").lower()
-        black = g.get("black", {}).get("username", "").lower()
-        pgn = g.get("pgn", "")
+        if cutoff is None:
+            # Fetch all available months backwards (uses cache after first run)
+            games = []
+            for y, m in month_iter_backwards(today):
+                games.extend(fetch_month_games(args.user, y, m, args.verbose))
+        else:
+            games = fetch_games_for_range(args.user, cutoff, today, args.verbose)
 
-        # Skip coach/training/odd entries
-        if 'Event "Play vs Coach"' in pgn:
-            continue
-        if white == "chess.com" or black == "chess.com":
-            continue
+        parsed = []
+        for g in games:
+            white = g.get("white", {}).get("username", "").lower()
+            black = g.get("black", {}).get("username", "").lower()
+            pgn = g.get("pgn", "")
 
-        start, end = parse_pgn_times(pgn, args.verbose)
-        if not start or not end:
-            continue
+            # Skip coach/training/odd entries
+            if 'Event "Play vs Coach"' in pgn:
+                continue
+            if white == "chess.com" or black == "chess.com":
+                continue
 
-        local_start = start.astimezone(LOCAL_TZ)
-        game_day = (local_start - day_shift).date()
+            start, end = parse_pgn_times(pgn, args.verbose)
+            if not start or not end:
+                continue
 
-        if cutoff <= game_day <= today:
-            res, side = get_game_result(g, args.user)
-            parsed.append((start, end, res, side))
+            local_start = start.astimezone(LOCAL_TZ)
+            game_day = (local_start - day_shift).date()
 
-    parsed.sort(key=lambda x: x[0])
+            if cutoff is None or (cutoff <= game_day <= today):
+                res, side = get_game_result(g, args.user)
+                parsed.append((start, end, res, side))
+
+        parsed.sort(key=lambda x: x[0])
+
+        # Optionally limit to the most recent N games within the day window
+        if args.games is not None and args.games > 0:
+            parsed = parsed[-args.games:]
+
     if not parsed:
         print("No games found.")
         return
