@@ -3,3 +3,4 @@ chess/*.*
 .env
 .envrc
 json/*
+*.pyc
