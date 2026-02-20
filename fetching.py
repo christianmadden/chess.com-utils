@@ -111,7 +111,7 @@ def month_iter_backwards(end_date: dt.date, max_months: int = 36):
             m -= 1
 
 
-def _is_skippable(game: dict) -> bool:
+def is_skippable(game: dict) -> bool:
     """Return True for coach/training/odd entries we want to ignore."""
     white = game.get("white", {}).get("username", "").lower()
     black = game.get("black", {}).get("username", "").lower()
@@ -132,7 +132,7 @@ def fetch_most_recent_games(username, n: int, verbose: bool = False):
     for y, m in month_iter_backwards(now.date()):
         games = fetch_month_games(username, y, m, verbose)
         for g in games:
-            if _is_skippable(g):
+            if is_skippable(g):
                 continue
             start, end = parse_pgn_times(g.get("pgn", ""), verbose)
             if not start or not end:
