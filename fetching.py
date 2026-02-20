@@ -162,49 +162,78 @@ def _country_cache_path(username: str) -> str:
     return os.path.join(CACHE_ROOT, safe_user, "country_cache.json")
 
 
-def _load_country_cache(username: str) -> dict:
-    path = _country_cache_path(username)
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f).get("player_country", {})
-    except Exception:
-        return {}
-
-
-def _save_country_cache(username: str, player_country: dict):
-    path = _country_cache_path(username)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = f"{path}.tmp"
-    try:
-        existing = {}
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                existing = json.load(f)
-        existing["player_country"] = player_country
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(existing, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-    except Exception:
-        pass
+def _code_to_flag(code: str) -> str:
+    """Convert a 2-letter ISO country code to a flag emoji."""
+    if not code or len(code) != 2:
+        return ""
+    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in code.upper())
 
 
 def get_country_lookup(our_username: str, opp_usernames: list, verbose: bool = False) -> dict:
-    """Return {username.lower(): country_code} for all opponents, fetching uncached ones."""
-    cache = _load_country_cache(our_username)
-    uncached = [u for u in opp_usernames if u and u.lower() not in cache]
-    for opp in uncached:
-        url = f"https://api.chess.com/pub/player/{opp}"
+    """Return {username.lower(): "🇺🇸 United States"} for all opponents, fetching uncached ones."""
+    path = _country_cache_path(our_username)
+    existing = {}
+    if os.path.exists(path):
         try:
-            resp = requests.get(url, headers={"User-Agent": "chess-sessions/1.0"}, timeout=10)
+            with open(path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+
+    player_country = existing.get("player_country", {})
+    country_name = existing.get("country_name", {})
+
+    # Fetch player country codes for any uncached opponents
+    uncached_players = [u for u in opp_usernames if u and u.lower() not in player_country]
+    for opp in uncached_players:
+        try:
+            resp = requests.get(
+                f"https://api.chess.com/pub/player/{opp}",
+                headers={"User-Agent": "chess-sessions/1.0"}, timeout=10,
+            )
             resp.raise_for_status()
             country_url = resp.json().get("country", "")
             code = country_url.rstrip("/").split("/")[-1] if country_url else None
-            cache[opp.lower()] = code
+            player_country[opp.lower()] = code
             dprint(verbose, f"Fetched country for {opp}: {code}")
         except Exception:
-            cache[opp.lower()] = None
-    if uncached:
-        _save_country_cache(our_username, cache)
-    return cache
+            player_country[opp.lower()] = None
+
+    # Fetch full country names for any codes not yet in the name cache
+    unknown_codes = {c for c in player_country.values() if c and c not in country_name}
+    for code in unknown_codes:
+        try:
+            resp = requests.get(
+                f"https://api.chess.com/pub/country/{code}",
+                headers={"User-Agent": "chess-sessions/1.0"}, timeout=10,
+            )
+            resp.raise_for_status()
+            country_name[code] = resp.json().get("name", code)
+            dprint(verbose, f"Fetched name for {code}: {country_name[code]}")
+        except Exception:
+            country_name[code] = code
+
+    # Persist updated cache
+    if uncached_players or unknown_codes:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.tmp"
+        try:
+            existing["player_country"] = player_country
+            existing["country_name"] = country_name
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(existing, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, path)
+        except Exception:
+            pass
+
+    # Build display strings: "🇺🇸 United States"
+    result = {}
+    for opp in opp_usernames:
+        if not opp:
+            continue
+        code = player_country.get(opp.lower())
+        if code:
+            result[opp.lower()] = f"{_code_to_flag(code)} {country_name.get(code, code)}"
+        else:
+            result[opp.lower()] = ""
+    return result

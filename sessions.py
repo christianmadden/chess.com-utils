@@ -270,7 +270,7 @@ def main():
                 gt.add_column("", justify="left", width=3)
                 gt.add_column("Acc", justify="right", width=6)
                 gt.add_column("Opponent", justify="left", width=32)
-                gt.add_column("CC", justify="left", width=3)
+                gt.add_column("CC", justify="left", width=20)
                 gt.add_column("Opp Elo", justify="right", width=7)
                 gt.add_column("My Elo", justify="right", width=14)
 
@@ -283,7 +283,7 @@ def main():
                     acc_str = f"{acc:.1f}%" if isinstance(acc, float) else ""
 
                     opp_user = d.get("opp_user") or ""
-                    country_code = country_lookup.get(opp_user.lower()) or ""
+                    country_display = country_lookup.get(opp_user.lower()) or ""
                     opp_rating = d.get("opp_rating_after")
                     opp_elo_str = str(opp_rating) if opp_rating is not None else ""
 
@@ -311,7 +311,7 @@ def main():
                         res_badge,
                         acc_str,
                         opp_user,
-                        country_code,
+                        country_display,
                         opp_elo_str,
                         my_elo_cell
                     )
