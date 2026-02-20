@@ -300,9 +300,10 @@ def main():
                         if prev_my_rating is not None:
                             delta = my_after - prev_my_rating
                             sign = "+" if delta >= 0 else ""
-                            my_elo_cell = Text(f"{my_after} {sign}{delta}", style=elo_style)
+                            delta_str = f"{sign}{delta}".rjust(4)
+                            my_elo_cell = Text(f"{my_after} {delta_str}", style=elo_style)
                         else:
-                            my_elo_cell = Text(f"{my_after} --", style=elo_style)
+                            my_elo_cell = Text(f"{my_after} {'--':>4}", style=elo_style)
                         prev_my_rating = my_after
                     else:
                         my_elo_cell = Text("")

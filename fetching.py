@@ -162,12 +162,6 @@ def _country_cache_path(username: str) -> str:
     return os.path.join(CACHE_ROOT, safe_user, "country_cache.json")
 
 
-def _code_to_flag(code: str) -> str:
-    """Convert a 2-letter ISO country code to a flag emoji."""
-    if not code or len(code) != 2:
-        return ""
-    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in code.upper())
-
 
 def get_country_lookup(our_username: str, opp_usernames: list, verbose: bool = False) -> dict:
     """Return {username.lower(): "🇺🇸 United States"} for all opponents, fetching uncached ones."""
@@ -233,7 +227,7 @@ def get_country_lookup(our_username: str, opp_usernames: list, verbose: bool = F
             continue
         code = player_country.get(opp.lower())
         if code:
-            result[opp.lower()] = f"{_code_to_flag(code)} {country_name.get(code, code)}"
+            result[opp.lower()] = country_name.get(code, code)
         else:
             result[opp.lower()] = ""
     return result
