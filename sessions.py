@@ -259,6 +259,7 @@ def main():
                 gt.add_column("Opp Elo", justify="right", width=7)
                 gt.add_column("My Elo", justify="right", width=12)
 
+                prev_my_rating = None
                 for gg in sess:
                     d = extract_game_details(gg[4], args.user)
 
@@ -272,7 +273,6 @@ def main():
                     opp_elo_str = str(opp_rating) if opp_rating is not None else ""
 
                     my_after = d.get("my_rating_after")
-                    my_diff = d.get("my_diff")
 
                     if my_after is not None:
                         result_letter = gg[2]
@@ -282,11 +282,13 @@ def main():
                             elo_style = "red"
                         else:
                             elo_style = ""
-                        if my_diff is not None:
-                            sign = "+" if my_diff >= 0 else ""
-                            my_elo_cell = Text(f"{my_after} {sign}{my_diff}", style=elo_style)
+                        if prev_my_rating is not None:
+                            delta = my_after - prev_my_rating
+                            sign = "+" if delta >= 0 else ""
+                            my_elo_cell = Text(f"{my_after} {sign}{delta}", style=elo_style)
                         else:
-                            my_elo_cell = Text(str(my_after), style=elo_style)
+                            my_elo_cell = Text(f"{my_after} --", style=elo_style)
+                        prev_my_rating = my_after
                     else:
                         my_elo_cell = Text("")
 

@@ -195,7 +195,7 @@ def colorize_result(res: str, side: str) -> Text:
 
 
 def colorize_results_by_session(sessions_by_day):
-    """Render a W/L/D strip with session groups separated by a divider."""
+    """Render a W/L/D strip grouped by session and day."""
     text = Text()
     for day in sorted(sessions_by_day):
         for sess in sessions_by_day[day]:
