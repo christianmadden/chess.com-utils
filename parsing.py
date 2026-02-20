@@ -8,7 +8,7 @@ from config import PGN_DATE_RE, PGN_START_RE, PGN_END_RE, PGN_TAG_RE
 
 def dprint(enabled: bool, msg: str) -> None:
     if enabled:
-        now = dt.datetime.now().strftime("%H:%M:%S")
+        now = dt.datetime.now(dt.timezone.utc).strftime("%H:%M:%S")
         print(f"[{now}] {msg}")
 
 
@@ -29,6 +29,9 @@ def parse_pgn_times(pgn: str, verbose: bool = False):
     end = dt.datetime.strptime(
         f"{m_date.group(1)} {m_end.group(1)}", "%Y.%m.%d %H:%M:%S"
     ).replace(tzinfo=dt.timezone.utc)
+
+    if end < start:
+        end += dt.timedelta(days=1)
 
     return start, end
 
@@ -117,20 +120,31 @@ def extract_game_details(game: dict, username: str):
         opp_rating_after = black_rating_after
 
     my_rating_after = None
+    my_diff = None
     my_acc = None
 
     if me_side == "W":
         my_rating_after = white_rating_after
+        my_diff = white_diff
         my_acc = white_acc
     elif me_side == "B":
         my_rating_after = black_rating_after
+        my_diff = black_diff
         my_acc = black_acc
+
+    my_rating_before = (
+        (my_rating_after - my_diff)
+        if (my_rating_after is not None and my_diff is not None)
+        else None
+    )
 
     return {
         "me_side": me_side,
         "opp_user": opp_user,
         "opp_rating_after": opp_rating_after,
+        "my_rating_before": my_rating_before,
         "my_rating_after": my_rating_after,
+        "my_diff": my_diff,
         "my_accuracy": my_acc,
         "time_class": game.get("time_class"),
         "rated": game.get("rated"),
@@ -185,14 +199,6 @@ def colorize_results_by_session(sessions_by_day):
     text = Text()
     for day in sorted(sessions_by_day):
         for sess in sessions_by_day[day]:
-            for i, g in enumerate(sess):
-                res, side = g[2], g[3]
-                bg = "#333333" if side == "B" else "#eeeeee"
-                if res == "W":
-                    style = Style(color="#00aa00", bgcolor=bg)
-                elif res == "L":
-                    style = Style(color="#ff0000", bgcolor=bg)
-                else:
-                    style = Style(color="#666666", bgcolor=bg)
-                text.append(f" {res} ", style=style)
+            for g in sess:
+                text.append_text(colorize_result(g[2], g[3]))
     return text

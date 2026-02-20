@@ -29,7 +29,7 @@ from fetching import (
     fetch_most_recent_games,
     fetch_games_for_range,
     month_iter_backwards,
-    _is_skippable,
+    is_skippable,
 )
 
 
@@ -97,7 +97,7 @@ def main():
     )
     parser.add_argument(
         "--games", type=int, default=None,
-        help="Limit output to the most recent N games (overrides --days filtering)",
+        help="Show only the N most recent games",
     )
     parser.add_argument(
         "--details", action=argparse.BooleanOptionalAction, default=True,
@@ -140,7 +140,7 @@ def main():
 
         parsed = []
         for g in games:
-            if _is_skippable(g):
+            if is_skippable(g):
                 continue
 
             start, end = parse_pgn_times(g.get("pgn", ""), args.verbose)
@@ -231,20 +231,11 @@ def main():
 
     # ── Per-day output ───────────────────────────────────────────────
     for day in sorted(sessions_by_day):
-        day_results = [
-            (g[2], g[3])
-            for s in sessions_by_day[day]
-            for g in s
-        ]
-
-        # Day header
         console.print()
         console.print()
         console.print(f"[bold]{day.strftime('%A, %B %-d')}[/bold]")
-        #console.rule(style="white")
 
         for sess in sessions_by_day[day]:
-            
             start = sess[0][0].astimezone(LOCAL_TZ)
             end = sess[-1][1].astimezone(LOCAL_TZ)
 
@@ -266,7 +257,7 @@ def main():
                 gt.add_column("Acc", justify="right", width=6)
                 gt.add_column("Opponent", justify="left", width=32)
                 gt.add_column("Opp Elo", justify="right", width=7)
-                gt.add_column("My Elo", justify="right", width=7)
+                gt.add_column("My Elo", justify="right", width=12)
 
                 for gg in sess:
                     d = extract_game_details(gg[4], args.user)
@@ -275,9 +266,6 @@ def main():
 
                     acc = d.get("my_accuracy")
                     acc_str = f"{acc:.1f}%" if isinstance(acc, float) else ""
-
-                    move_count = d.get("move_count")
-                    moves_str = str(move_count) if move_count is not None else ""
 
                     opp_user = d.get("opp_user") or ""
                     opp_rating = d.get("opp_rating_after")
@@ -294,7 +282,11 @@ def main():
                             elo_style = "red"
                         else:
                             elo_style = ""
-                        my_elo_cell = Text(str(my_after), style=elo_style)
+                        if my_diff is not None:
+                            sign = "+" if my_diff >= 0 else ""
+                            my_elo_cell = Text(f"{my_after} {sign}{my_diff}", style=elo_style)
+                        else:
+                            my_elo_cell = Text(str(my_after), style=elo_style)
                     else:
                         my_elo_cell = Text("")
 
