@@ -280,7 +280,22 @@ def main():
                     res_badge = colorize_result(gg[2], d.get("me_side"))
 
                     acc = d.get("my_accuracy")
-                    acc_str = f"{acc:.1f}%" if isinstance(acc, float) else ""
+                    if isinstance(acc, float):
+                        if acc >= 90:
+                            acc_color = "#84DEFD"
+                        elif acc >= 80:
+                            acc_color = "#F8C631"
+                        elif acc >= 70:
+                            acc_color = "#00aa00"
+                        elif acc >= 60:
+                            acc_color = "white"
+                        elif acc >= 50:
+                            acc_color = "#666666"
+                        else:
+                            acc_color = "#ff0000"
+                        acc_cell = Text(f"{acc:.1f}%", style=acc_color)
+                    else:
+                        acc_cell = Text("")
 
                     opp_user = d.get("opp_user") or ""
                     country_display = country_lookup.get(opp_user.lower()) or ""
@@ -310,7 +325,7 @@ def main():
 
                     gt.add_row(
                         res_badge,
-                        acc_str,
+                        acc_cell,
                         opp_user,
                         country_display,
                         opp_elo_str,
