@@ -30,6 +30,7 @@ from fetching import (
     fetch_games_for_range,
     month_iter_backwards,
     is_skippable,
+    get_country_lookup,
 )
 
 
@@ -163,6 +164,18 @@ def main():
         console.print("No games found.")
         return
 
+    # Pre-fetch country codes for all opponents (uses local cache, fetches misses)
+    username_l = args.user.lower()
+    opp_usernames = set()
+    for _, _, _, _, g in parsed:
+        w = g.get("white", {}).get("username", "")
+        b = g.get("black", {}).get("username", "")
+        if w.lower() == username_l:
+            opp_usernames.add(b)
+        elif b.lower() == username_l:
+            opp_usernames.add(w)
+    country_lookup = get_country_lookup(args.user, list(opp_usernames), args.verbose)
+
     # ── Group into sessions ──────────────────────────────────────────
     sessions = []
     gap = dt.timedelta(minutes=args.gap)
@@ -230,6 +243,7 @@ def main():
         console.print(elo_text)
 
     # ── Per-day output ───────────────────────────────────────────────
+    prev_my_rating = None
     for day in sorted(sessions_by_day):
         console.print()
         console.print()
@@ -256,10 +270,10 @@ def main():
                 gt.add_column("", justify="left", width=3)
                 gt.add_column("Acc", justify="right", width=6)
                 gt.add_column("Opponent", justify="left", width=32)
+                gt.add_column("CC", justify="left", width=3)
                 gt.add_column("Opp Elo", justify="right", width=7)
-                gt.add_column("My Elo", justify="right", width=12)
+                gt.add_column("My Elo", justify="right", width=14)
 
-                prev_my_rating = None
                 for gg in sess:
                     d = extract_game_details(gg[4], args.user)
 
@@ -269,6 +283,7 @@ def main():
                     acc_str = f"{acc:.1f}%" if isinstance(acc, float) else ""
 
                     opp_user = d.get("opp_user") or ""
+                    country_code = country_lookup.get(opp_user.lower()) or ""
                     opp_rating = d.get("opp_rating_after")
                     opp_elo_str = str(opp_rating) if opp_rating is not None else ""
 
@@ -296,6 +311,7 @@ def main():
                         res_badge,
                         acc_str,
                         opp_user,
+                        country_code,
                         opp_elo_str,
                         my_elo_cell
                     )

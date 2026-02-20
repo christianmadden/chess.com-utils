@@ -151,3 +151,60 @@ def fetch_games_for_range(username, start_date, end_date, verbose=False):
     for y, m in month_iter(start_date, end_date):
         all_games.extend(fetch_month_games(username, y, m, verbose))
     return all_games
+
+
+# ========================
+# Country code lookup
+# ========================
+
+def _country_cache_path(username: str) -> str:
+    safe_user = (username or "").strip().lower()
+    return os.path.join(CACHE_ROOT, safe_user, "country_cache.json")
+
+
+def _load_country_cache(username: str) -> dict:
+    path = _country_cache_path(username)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f).get("player_country", {})
+    except Exception:
+        return {}
+
+
+def _save_country_cache(username: str, player_country: dict):
+    path = _country_cache_path(username)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.tmp"
+    try:
+        existing = {}
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        existing["player_country"] = player_country
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+
+def get_country_lookup(our_username: str, opp_usernames: list, verbose: bool = False) -> dict:
+    """Return {username.lower(): country_code} for all opponents, fetching uncached ones."""
+    cache = _load_country_cache(our_username)
+    uncached = [u for u in opp_usernames if u and u.lower() not in cache]
+    for opp in uncached:
+        url = f"https://api.chess.com/pub/player/{opp}"
+        try:
+            resp = requests.get(url, headers={"User-Agent": "chess-sessions/1.0"}, timeout=10)
+            resp.raise_for_status()
+            country_url = resp.json().get("country", "")
+            code = country_url.rstrip("/").split("/")[-1] if country_url else None
+            cache[opp.lower()] = code
+            dprint(verbose, f"Fetched country for {opp}: {code}")
+        except Exception:
+            cache[opp.lower()] = None
+    if uncached:
+        _save_country_cache(our_username, cache)
+    return cache
