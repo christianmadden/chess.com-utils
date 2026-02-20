@@ -296,7 +296,7 @@ def main():
                         elif result_letter == "L":
                             elo_style = "red"
                         else:
-                            elo_style = ""
+                            elo_style = "#666666"
                         if prev_my_rating is not None:
                             delta = my_after - prev_my_rating
                             sign = "+" if delta >= 0 else ""
