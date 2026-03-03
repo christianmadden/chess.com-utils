@@ -269,6 +269,8 @@ def main():
                 )
                 gt.add_column("", justify="left", width=3)
                 gt.add_column("Acc", justify="right", width=6)
+                gt.add_column("OAcc", justify="right", width=6)
+                gt.add_column("Moves", justify="right", width=5)
                 gt.add_column("Opponent", justify="left", width=32)
                 gt.add_column("CC", justify="left", width=20)
                 gt.add_column("Opp Elo", justify="right", width=7)
@@ -296,6 +298,12 @@ def main():
                         acc_cell = Text(f"{acc:.1f}%", style=acc_color)
                     else:
                         acc_cell = Text("")
+
+                    opp_acc = d.get("opp_accuracy")
+                    opp_acc_cell = Text(f"{opp_acc:.1f}%", style="white") if isinstance(opp_acc, float) else Text("")
+
+                    move_count = d.get("move_count")
+                    move_count_cell = Text(str(move_count), style="white") if move_count is not None else Text("")
 
                     opp_user = d.get("opp_user") or ""
                     country_display = country_lookup.get(opp_user.lower()) or ""
@@ -326,6 +334,8 @@ def main():
                     gt.add_row(
                         res_badge,
                         acc_cell,
+                        opp_acc_cell,
+                        move_count_cell,
                         opp_user,
                         country_display,
                         opp_elo_str,

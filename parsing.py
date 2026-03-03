@@ -1,4 +1,5 @@
 import datetime as dt
+import math
 
 from rich.style import Style
 from rich.text import Text
@@ -114,10 +115,13 @@ def extract_game_details(game: dict, username: str):
             black_acc = _to_float(acc_obj.get("black"))
 
     opp_rating_after = None
+    opp_acc = None
     if opp_side == "W":
         opp_rating_after = white_rating_after
+        opp_acc = white_acc
     elif opp_side == "B":
         opp_rating_after = black_rating_after
+        opp_acc = black_acc
 
     my_rating_after = None
     my_diff = None
@@ -138,6 +142,14 @@ def extract_game_details(game: dict, username: str):
         else None
     )
 
+    fen = game.get("fen", "")
+    if fen:
+        fen_parts = fen.split()
+        move_count = _to_int(fen_parts[-1]) if fen_parts else None
+    else:
+        ply_count = _to_int(tags.get("PlyCount"))
+        move_count = math.ceil(ply_count / 2) if ply_count is not None else None
+
     return {
         "me_side": me_side,
         "opp_user": opp_user,
@@ -146,6 +158,8 @@ def extract_game_details(game: dict, username: str):
         "my_rating_after": my_rating_after,
         "my_diff": my_diff,
         "my_accuracy": my_acc,
+        "opp_accuracy": opp_acc,
+        "move_count": move_count,
         "time_class": game.get("time_class"),
         "rated": game.get("rated"),
     }
